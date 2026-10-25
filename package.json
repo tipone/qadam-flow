@@ -11,6 +11,8 @@
     "serve:worker": "turbo run serve --filter=worker",
     "push": "turbo run lint && git push",
     "dev": "node tools/scripts/install-bun.js && turbo run serve --filter=web --filter=api --filter=@aiqadam/engine --filter=worker --ui stream",
+    "build:core-min": "turbo run build --filter=@aiqadam/shared --filter=@aiqadam/server-utils --filter=@aiqadam/qadams-framework --filter=@aiqadam/qadams-common --filter=@aiqadam/qadam-manual-trigger --filter=@aiqadam/qadam-http --filter=@aiqadam/qadam-webhook --filter=@aiqadam/qadam-delay --filter=@aiqadam/qadam-subflows --filter=@aiqadam/qadam-data-mapper --filter=@aiqadam/qadam-schedule --filter=@aiqadam/qadam-approval --filter=@aiqadam/qadam-store --filter=@aiqadam/qadam-tables --filter=@aiqadam/engine --concurrency=2",
+    "dev:prod": "node tools/scripts/install-bun.js && QF_ENV_FILE=.env.prod npm run build:core-min && QF_ENV_FILE=.env.prod turbo run serve --filter=web --filter=api --filter=worker --ui stream",
     "dev:backend": "turbo run serve --filter=api --filter=@aiqadam/engine --ui stream",
     "dev:frontend": "turbo run serve --filter=web --filter=api --filter=@aiqadam/engine --ui stream",
     "start": "node tools/setup-dev.js && npm run dev",
