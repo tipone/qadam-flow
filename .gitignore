@@ -1,5 +1,5 @@
 # See http://help.github.com/ignore-files/ for more about ignoring files.
-
+documents/
 # Claude Code worktrees
 .claude/worktrees/
 .claude/scheduled_tasks.lock
