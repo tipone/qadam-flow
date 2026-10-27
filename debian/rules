@@ -50,14 +50,15 @@ override_dh_usrlocal:
 	# contract (lintian's file-in-usr-local is overridden accordingly).
 
 override_dh_strip:
-	# The vendored tree ships prebuilt ELF addons for several architectures
-	# (oracledb carries an arm64 module) and the host binutils cannot even read
-	# the foreign ones — objcopy aborts with "Unable to recognise the
-	# architecture". The binaries were already load-verified against node 24
-	# and the Docker image ships them byte-identical, so stripping buys
-	# nothing; the automatic dbgsym package for a multi-GB tree costs minutes
-	# and gigabytes. No strip, no dbgsym, anywhere.
-	dh_strip -X node_modules --no-automatic-dbgsym
+	# The payload ships ELF binaries that must stay byte-identical with the
+	# Docker image: the vendored node_modules addons and, outside node_modules
+	# (which a -X exclude would miss), packages/server/api/src/assets/ holds
+	# the prebuilt isolate / isolate-arm sandbox binaries. The host binutils
+	# cannot even read the foreign-architecture ones ("Unable to recognise the
+	# architecture" kills both objcopy and strip), the files were already
+	# load-verified under node 24, and the automatic dbgsym for a multi-GB
+	# tree costs minutes and gigabytes. So dh_strip is not invoked at all.
+	:
 
 override_dh_fixperms:
 	dh_fixperms
