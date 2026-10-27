@@ -41,6 +41,24 @@ override_dh_installsystemd:
 	dh_installsystemd -pqadam-flow --name=qadam-flow-master
 	dh_installsystemd -pqadam-flow-worker
 
+override_dh_usrlocal:
+	# Docker parity: the vendored isolate binary reads its compiled-in config
+	# path /usr/local/etc/isolate — a plain FILE holding default.cf, exactly
+	# as the Dockerfile COPYs it — and dh_usrlocal refuses any file it finds
+	# under /usr/local. The deb mirrors the container layout, so the
+	# usrlocal-migration helper is skipped rather than splitting the runtime
+	# contract (lintian's file-in-usr-local is overridden accordingly).
+
+override_dh_strip:
+	# The vendored tree ships prebuilt ELF addons for several architectures
+	# (oracledb carries an arm64 module) and the host binutils cannot even read
+	# the foreign ones — objcopy aborts with "Unable to recognise the
+	# architecture". The binaries were already load-verified against node 24
+	# and the Docker image ships them byte-identical, so stripping buys
+	# nothing; the automatic dbgsym package for a multi-GB tree costs minutes
+	# and gigabytes. No strip, no dbgsym, anywhere.
+	dh_strip -X node_modules --no-automatic-dbgsym
+
 override_dh_fixperms:
 	dh_fixperms
 	chmod 0600 debian/qadam-flow/etc/qadam-flow/master.conf

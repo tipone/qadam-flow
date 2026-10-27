@@ -12,6 +12,7 @@ qadam-flow-common: wrong-path-for-interpreter usr/lib/qadam-flow/node_modules/*
 qadam-flow-common: hardening-no-fortify-functions usr/lib/qadam-flow/node_modules/*
 qadam-flow-common: hardening-no-pie usr/lib/qadam-flow/node_modules/*
 qadam-flow-common: file-in-unusual-dir [usr/src/node_modules]
+qadam-flow-common: file-in-usr-local [usr/local/etc/isolate]
 qadam-flow-common: non-standard-dir-in-usr
 qadam-flow-common: package-installs-ieee-data
 qadam-flow-common: package-contains-web-assets-remote

@@ -1,2 +1,2 @@
-debian/qadam-flow-worker usr/bin/
+debian/scripts/qadam-flow-worker usr/bin/
 debian/worker.conf etc/qadam-flow/
