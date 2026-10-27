@@ -110,11 +110,11 @@ packages/tests-e2e/acceptance/certs/
 # A local redis-server started for the CE tests writes its snapshot into its working directory.
 dump.rdb
 
-# Payload staged by scripts/debian-prebuild.sh before dpkg-buildpackage.
-debian/prebuild/
-# Stash + lock for scripts/workspace-to-file.cjs (apply/restore during the prebuild).
-.workspace-stash.json
-.workspace-stash.json.lock
+# Copy-out Debian build area (scripts/debian-prebuild.sh): the disposable
+# source copy, the staged payload and the artifacts all live under build/ —
+# a .deb build never writes the repo tree. build/package-lock.json is the
+# REFRESH_LOCK=1 product; the bootstrap commits it at the repo root instead.
+/build/
 
 # Written by the Dockerfile (#419); a copy in a dev tree would go stale on the next qadam build.
 packages/qadams/dist-index.json

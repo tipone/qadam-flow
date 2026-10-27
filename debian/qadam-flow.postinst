@@ -3,8 +3,10 @@
 # =============================================================================
 # - creates the qadam system user,
 # - prepares /etc/qadam-flow, /var/lib/qadam-flow, /var/cache/qadam-flow,
-# - replaces the CHANGE_ME placeholders with fresh random secrets (first
-#   install only; pre-existing values are never overwritten),
+# - replaces the CHANGE_ME placeholders one by one with fresh random secrets
+#   (each key only while its own value still reads CHANGE_ME: an operator's
+#   pre-set values are never overwritten, and rewinding a single key re-mints
+#   only that key),
 # - creates the qadam_flow Postgres role + database + pgvector extension,
 # - chmod's both conffiles to 0600,
 # then hands over to debhelper for the systemd enable/start snippets.
@@ -17,7 +19,7 @@ MASTER_CONF=/etc/qadam-flow/master.conf
 WORKER_CONF=/etc/qadam-flow/worker.conf
 STATE_DIR=/var/lib/qadam-flow
 CACHE_DIR=/var/cache/qadam-flow
-MINTED=
+DB_MINTED=
 
 if [ "$1" != "configure" ]; then
     exit 0
@@ -38,31 +40,37 @@ install -d -o qadam -g qadam -m 0750 "$STATE_DIR" "$CACHE_DIR" \
 chmod 0600 "$MASTER_CONF"
 [ -f "$WORKER_CONF" ] && chmod 0600 "$WORKER_CONF" || true
 
-# --- mint secrets once --------------------------------------------------------
-# systemd-format conf = shell KEY=VALUE, so sourcing it is safe here. The
-# values are only replaced while they still read CHANGE_ME: an operator's
-# own secret can never be clobbered by an upgrade.
-if grep -qE '^(AP_ENCRYPTION_KEY|AP_JWT_SECRET|AP_POSTGRES_PASSWORD)=CHANGE_ME' "$MASTER_CONF"; then
-    ENC_KEY=$(openssl rand -hex 16)
-    JWT_SECRET=$(openssl rand -hex 32)
-    DB_PASSWORD=$(openssl rand -hex 16)
-    MINTED=1
+# --- mint secrets per key -------------------------------------------------------
+# systemd-format conf = shell KEY=VALUE, so sourcing it is safe here. Each
+# placeholder is replaced only while its own line still reads
+# KEY=CHANGE_ME (value-level exact match): operator-set values survive the
+# rewrite untouched, and rewinding one key re-mints only that key. The
+# database password is tracked separately — the ALTER ROLE resync below
+# must fire only when the DB password itself was minted, never because an
+# unrelated key happened to be.
+if grep -qE '^AP_(ENCRYPTION_KEY|AP_JWT_SECRET|AP_POSTGRES_PASSWORD)=CHANGE_ME$' "$MASTER_CONF"; then
+    ENC_VAL=$(openssl rand -hex 16)
+    JWT_VAL=$(openssl rand -hex 32)
+    PASS_VAL=$(openssl rand -hex 16)
+    grep -q '^AP_POSTGRES_PASSWORD=CHANGE_ME$' "$MASTER_CONF" && DB_MINTED=1
     # Secrets must stay out of argv (world-readable /proc/*/cmdline during
     # apt install — the same threat docker-entrypoint.sh:37-43 designs out):
-    # pass them via the environment to awk, rewrite only the matching lines
-    # into a tmp file carrying the target's owner/mode, then rename.
-    if ENC_VAL="$ENC_KEY" JWT_VAL="$JWT_SECRET" PASS_VAL="$DB_PASSWORD" \
+    # they travel through the environment to awk, which rewrites only the
+    # placeholder lines into a mktemp file — 0600 from creation, no
+    # world-readable window — carrying the target's owner, then rename.
+    TMP_FILE=$(mktemp "$MASTER_CONF.tmp.XXXXXX")
+    if ENC_VAL="$ENC_VAL" JWT_VAL="$JWT_VAL" PASS_VAL="$PASS_VAL" \
         awk '{
-            if ($0 ~ /^AP_ENCRYPTION_KEY=/)         print "AP_ENCRYPTION_KEY="     ENVIRON["ENC_VAL"]
-            else if ($0 ~ /^AP_JWT_SECRET=/)        print "AP_JWT_SECRET="         ENVIRON["JWT_VAL"]
-            else if ($0 ~ /^AP_POSTGRES_PASSWORD=/) print "AP_POSTGRES_PASSWORD="  ENVIRON["PASS_VAL"]
-            else print
-        }' "$MASTER_CONF" > "$MASTER_CONF.tmp.$$" \
-        && chmod 0600 "$MASTER_CONF.tmp.$$" \
-        && chown --reference "$MASTER_CONF" "$MASTER_CONF.tmp.$$"; then
-        mv -f "$MASTER_CONF.tmp.$$" "$MASTER_CONF"
+            if ($0 == "AP_ENCRYPTION_KEY=CHANGE_ME")    { print "AP_ENCRYPTION_KEY="    ENVIRON["ENC_VAL"]; next }
+            if ($0 == "AP_JWT_SECRET=CHANGE_ME")        { print "AP_JWT_SECRET="        ENVIRON["JWT_VAL"]; next }
+            if ($0 == "AP_POSTGRES_PASSWORD=CHANGE_ME") { print "AP_POSTGRES_PASSWORD=" ENVIRON["PASS_VAL"]; next }
+            print
+        }' "$MASTER_CONF" > "$TMP_FILE" \
+        && chmod 0600 "$TMP_FILE" \
+        && chown --reference "$MASTER_CONF" "$TMP_FILE"; then
+        mv -f "$TMP_FILE" "$MASTER_CONF"
     else
-        rm -f "$MASTER_CONF.tmp.$$"
+        rm -f "$TMP_FILE"
         echo "ERROR: could not mint secrets into $MASTER_CONF" >&2
         exit 1
     fi
@@ -107,12 +115,15 @@ WHERE NOT EXISTS (SELECT FROM pg_catalog.pg_database WHERE datname = '$AP_POSTGR
 PSQL
     su -s /bin/sh postgres -c "$PGBIN/psql -X -q -d $AP_POSTGRES_DATABASE -c 'CREATE EXTENSION IF NOT EXISTS vector;'" >/dev/null
 
-    if [ -n "$MINTED" ]; then
+    if [ -n "$DB_MINTED" ]; then
         # A purge keeps the role/database (the postrm prints the drop
         # statements instead of destroying data), so a REINSTALL mints a new
         # password into the conffile — resync it into the pre-existing role
-        # or every restart fails at authentication. An upgrade without a
-        # mint never reaches this, so operator-set passwords stay untouched.
+        # or every restart fails at authentication. This fires only when the
+        # DB password itself was freshly minted (DB_MINTED above): an
+        # upgrade with operator-set values, or a mint that only touched the
+        # JWT/encryption keys, never reaches this, so operator passwords
+        # stay untouched.
         su -s /bin/sh postgres -c "$PGBIN/psql -X -q -v ON_ERROR_STOP=1" <<PSQL >/dev/null
 ALTER ROLE "$AP_POSTGRES_USERNAME" WITH PASSWORD '$PW_SQL';
 PSQL
