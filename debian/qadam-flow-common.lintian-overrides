@@ -1,0 +1,17 @@
+# The vendored node_modules tree carries thousands of .js files plus a few
+# native addons (isolated-vm, sqlite3). These tags are the expected result
+# of shipping a prebuilt Node.js application in a directory outside
+# /usr/share — not actionable.
+qadam-flow-common: embedded-javascript-library usr/lib/qadam-flow/node_modules/*
+qadam-flow-common: embedded-javascript-library usr/share/qadam-flow/web/*
+qadam-flow-common: missing-dependency-on-libc
+qadam-flow-common: shared-library-lacks-prerequisites
+qadam-flow-common: unusual-interpreter src/*
+qadam-flow-common: script-not-executable usr/lib/qadam-flow/node_modules/*
+qadam-flow-common: wrong-path-for-interpreter usr/lib/qadam-flow/node_modules/*
+qadam-flow-common: hardening-no-fortify-functions usr/lib/qadam-flow/node_modules/*
+qadam-flow-common: hardening-no-pie usr/lib/qadam-flow/node_modules/*
+qadam-flow-common: file-in-unusual-dir [usr/src/node_modules]
+qadam-flow-common: non-standard-dir-in-usr
+qadam-flow-common: package-installs-ieee-data
+qadam-flow-common: package-contains-web-assets-remote

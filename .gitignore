@@ -1,5 +1,6 @@
 # See http://help.github.com/ignore-files/ for more about ignoring files.
 documents/
+build/
 # Claude Code worktrees
 .claude/worktrees/
 .claude/scheduled_tasks.lock
@@ -108,6 +109,12 @@ packages/tests-e2e/acceptance/certs/
 
 # A local redis-server started for the CE tests writes its snapshot into its working directory.
 dump.rdb
+
+# Payload staged by scripts/debian-prebuild.sh before dpkg-buildpackage.
+debian/prebuild/
+# Stash + lock for scripts/workspace-to-file.cjs (apply/restore during the prebuild).
+.workspace-stash.json
+.workspace-stash.json.lock
 
 # Written by the Dockerfile (#419); a copy in a dev tree would go stale on the next qadam build.
 packages/qadams/dist-index.json

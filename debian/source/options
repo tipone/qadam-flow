@@ -1,0 +1,4 @@
+# The prebuilt tree written by scripts/debian-prebuild.sh (buildbot perl prebuild / npm ci + npx turbo build) —
+# is only part of the binary payload, not of the source tarball.
+tar-ignore = debian/prebuild
+tar-ignore = node_modules

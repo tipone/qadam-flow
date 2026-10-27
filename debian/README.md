@@ -1,8 +1,15 @@
 # debian/
 
-Sources for the future `.deb` package. Nothing here is used by the Docker
-install or by `npm run dev`; the live files on a host are
-`/etc/qadam-flow/*.conf` and `/lib/systemd/system/qadam-flow-*.service`.
+Real Debian packaging: three binary packages from one source package, the
+knix-flare pattern. Nothing here is used by the Docker install or by
+`npm run dev`; the live files on a host are `/etc/qadam-flow/*.conf` and
+`/lib/systemd/system/qadam-flow*.service`.
+
+| Binary package | Contents |
+| --- | --- |
+| `qadam-flow-common` | `/usr/lib/qadam-flow` (vendored node_modules + built packages/dist), `/usr/share/qadam-flow/web`, `/usr/local/etc/isolate`, and the symlinks below |
+| `qadam-flow` (master) | `/usr/bin/qadam-flow-master`, `/etc/qadam-flow/master.conf`, `qadam-flow-master.service` |
+| `qadam-flow-worker` | `/usr/bin/qadam-flow-worker`, `/etc/qadam-flow/worker.conf`, `qadam-flow-worker.service` |
 
 | File | Installs to | Mode |
 | --- | --- | --- |
@@ -10,8 +17,24 @@ install or by `npm run dev`; the live files on a host are
 | `worker.conf` | `/etc/qadam-flow/worker.conf` | 0600 root:root (conffile) |
 | `qadam-flow-master` | `/usr/bin/qadam-flow-master` | 0755 |
 | `qadam-flow-worker` | `/usr/bin/qadam-flow-worker` | 0755 |
-| `qadam-flow-master.service` | `/lib/systemd/system/` | 0644 |
+| `qadam-flow.qadam-flow-master.service` | `/lib/systemd/system/qadam-flow-master.service` | 0644 |
 | `qadam-flow-worker.service` | `/lib/systemd/system/` | 0644 |
+
+The master unit file lives at `debian/qadam-flow.qadam-flow-master.service`
+(debhelper-canonical `<pkg>.<unit>` name — needed because the binary package
+is `qadam-flow` but the unit is `qadam-flow-master`).
+
+Both `/etc` confs become conffiles automatically (dh ≥ 13 turns anything
+dh_install places under `/etc` into a conffile), so there is no separate
+`conffiles` list. The vendored runtime payload is produced by
+`scripts/debian-prebuild.sh` on the buildbot into `debian/prebuild/`
+(`rules` uses `--buildsystem=none` and fails loudly when the stage is
+missing — npm/npx only, no bun). Runtime dependencies: `nodejs (>= 24.21)`;
+the master additionally needs `postgresql-18-pgvector | postgresql-17-pgvector`
+and `redis-server | valkey`; the worker deliberately needs neither (it only
+talks HTTP to the master), which is what makes it installable on a separate
+host. Full user notes: `debian/README.Debian`; manpages for the two
+launchers ship with them.
 
 systemd reads the two conf files as root before dropping privileges, so the
 `qadam` user never needs to read them. Keep them 0600: they hold
@@ -24,7 +47,7 @@ systemd reads the two conf files as root before dropping privileges, so the
     /usr/share/qadam-flow/web/           frontend build
     /var/lib/qadam-flow/                 state (qadam:qadam, 0750)
     /var/cache/qadam-flow/               cache (qadam:qadam, 0750)
-    /usr/share/doc/qadam-flow/           copyright, changelog, README.Debian
+    /usr/share/doc/qadam-flow-common/    copyright, changelog, README.Debian
 
 `StateDirectory=qadam-flow` and `CacheDirectory=qadam-flow` create the two
 `/var` directories. The app creates `qadam-versions/` and its subdirectories
@@ -34,20 +57,22 @@ The service user is a system account with no login shell:
 
     adduser --system --group --home /var/lib/qadam-flow --no-create-home qadam
 
-## Before first start
+## Secrets: minted, never overwritten
 
-Replace every placeholder in both confs:
+`qadam-flow.postinst` and `qadam-flow-worker.postinst` handle first-install
+secrets: `AP_ENCRYPTION_KEY` / `AP_JWT_SECRET` / `AP_POSTGRES_PASSWORD` in
+master.conf, `AP_WORKER_TOKEN` in worker.conf are minted while they still
+read `CHANGE_ME` — an operator's own values are never clobbered by an
+upgrade. The master postinst also creates the `qadam_flow` PostgreSQL role,
+database and pgvector extension (idempotent). What remains manual after
+every install:
 
-- `AP_FRONTEND_URL` — the public HTTPS URL of the web app.
-- `AP_POSTGRES_PASSWORD` — the database password.
-- `AP_ENCRYPTION_KEY` — `openssl rand -hex 16` (32 hex characters).
-- `AP_JWT_SECRET` — `openssl rand -hex 32`.
-- `AP_WORKER_TOKEN` — minted from `AP_JWT_SECRET`, see `INSTALL.md`.
-
-`AP_ENCRYPTION_KEY=CHANGE_ME` fails the API's 32-hex check at startup;
-`AP_JWT_SECRET` accepts any non-empty string, so a forgotten `CHANGE_ME`
-there is only caught by review. The confs are 0600, so read the secret with
-`sudo` when minting the worker token.
+- `AP_FRONTEND_URL` — the public HTTPS URL of the web app (postinst prints
+  a reminder while it is still the example default).
+- distributed worker installs with no co-hosted master: run
+  `qadam-flow-mint-worker-token` on the MASTER host (prints the derived
+  token, never the secret) and set the output as AP_WORKER_TOKEN in the
+  worker's conf.
 
 ## Verify after install
 
@@ -58,18 +83,20 @@ there is only caught by review. The confs are 0600, so read the secret with
 Editing a conf needs `systemctl restart`; `daemon-reload` is only for unit
 file changes.
 
-## Two symlinks the package must create
+## Three symlinks the package creates
 
 The server resolves these paths against its working directory
-(`process.cwd()`), so the package has to bridge them:
+(`process.cwd()`), so `qadam-flow-common.links` bridges them:
 
     /usr/lib/qadam-flow/cache               -> /var/cache/qadam-flow
     /usr/lib/qadam-flow/dist/packages/web   -> /usr/share/qadam-flow/web
+    /usr/src/node_modules                   -> /usr/lib/qadam-flow/node_modules
 
 Without the first, the worker cannot write its cache under
 `ProtectSystem=strict`. Without the second, the API's `fastifyStatic`
-registration in production fails at startup. Create them from `debian/links`
-or `postinst`.
+registration in production fails at startup. The third feeds the isolate
+sandbox, which hardcodes `/usr/src/node_modules/` as its vendoring bridge —
+only used by `SANDBOX_PROCESS` mode, but created unconditionally.
 
 ## Security notes
 
@@ -82,12 +109,16 @@ or `postinst`.
   should be public.
 - `LimitCORE=0` keeps core dumps, which can contain secrets, off disk.
 
-## Future packaging files
+## Packaging file list
 
-`control`, `rules`, `changelog`, `copyright` (DEP-5, MIT), `source/format`,
-`install`, `links`, `conffiles`, `postinst`, `prerm`, `postrm`. The units and
-confs stay where they are; `install` maps them to the paths above, and
-`conffiles` lists the two `/etc` paths so upgrades keep local edits.
+`control`, `rules` (`--buildsystem=none`), `changelog` (base version — the
+buildbot rewrites it to `1.1.0~stable.b<N>` per build counter), `copyright`
+(DEP-5, MIT), `source/format` (3.0 native), `source/options`
+(`tar-ignore` prebuild/node_modules), per-package `install`/`dirs`/`links`/
+`manpages`/`lintian-overrides`, `postinst`/`prerm`/`postrm` for master and
+worker, `README.Debian`, and one man page per launcher. The payload build
+script is `scripts/debian-prebuild.sh`; the buildbot builder is
+`config/builds/qadam-flow/qadam_flow_deb.yaml` in the knixbbot repo.
 
 `master` is our name for the process; the code calls it `APP`
 (`AP_CONTAINER_TYPE=APP`). The value inside the conf is what matters.
