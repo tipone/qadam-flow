@@ -39,7 +39,7 @@ Depends:
  openssl,
  ${misc:Depends},
 Recommends: nginx
-Description: qadam-flow master (API, frontend, scheduler)
+Description: master service of the qadam-flow platform (API, frontend, scheduler)
  Master service of Qadam Flow, the AI-first workflow automation platform.
  Runs as the systemd unit qadam-flow-master.service on port 3000 (unified
  behind a reverse proxy on 80/443 with the recommended nginx), owns the
@@ -69,4 +69,5 @@ Description: qadam-flow worker (flow execution node)
  Security defaults run in UNSANDBOXED/SANDBOX_CODE_ONLY mode. The
  SANDBOX_PROCESS and SANDBOX_CODE_AND_PROCESS modes additionally need the
  isolate sandbox bridge (/usr/src/node_modules symlink, provided by
- qadam-flow-common) plus unit hardening: see /usr/share/doc/qadam-flow-common/README.Debian.
+ qadam-flow-common) plus unit hardening; see
+ /usr/share/doc/qadam-flow-common/README.Debian.
