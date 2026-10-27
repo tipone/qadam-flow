@@ -124,8 +124,16 @@ DEBCOUNT=$(find "$BUILD/deb" -maxdepth 1 -name '*.deb' | wc -l)
 [ "$DEBCOUNT" -eq 3 ] || fail "expected exactly 3 binary debs in build/deb, got $DEBCOUNT"
 
 # --- 5. lintian --------------------------------------------------------------------------
+# lintian unpacks the payload into its pool under TMPDIR; /tmp is a small
+# tmpfs on many hosts and the 317MB common deb alone unpacks to ~1.5G —
+# observed "No space left on device" mid-run — so the pool is pinned into
+# the build tree (real disk) and dropped after the check.
 log "lintian --fail-on ${LINTIAN_FAIL_ON:-error}"
-lintian --fail-on "${LINTIAN_FAIL_ON:-error}" "$BUILD"/deb/*.deb
+mkdir -p "$BUILD/tmp"
+TMPDIR="$BUILD/tmp" lintian --fail-on "${LINTIAN_FAIL_ON:-error}" "$BUILD"/deb/*.deb
+rc=$?
+rm -rf "$BUILD/tmp"
+[ "$rc" -eq 0 ] || fail "lintian failed (rc=$rc)"
 
 ok "done — artifacts in build/deb:"
 ls -la "$BUILD/deb"
