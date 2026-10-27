@@ -60,6 +60,17 @@ override_dh_strip:
 	# tree costs minutes and gigabytes. So dh_strip is not invoked at all.
 	:
 
+override_dh_shlibdeps:
+	# dpkg-shlibdeps resolves every ELF's NEEDED libraries against the single
+	# host architecture; the vendored tree ships prebuilds for many platforms
+	# and ABIs (x64/arm64/musl/android/ia32), so the foreign ones abort with
+	# "cannot find library libstdc++.so.6 / libm.so.6 / ..." — the host's
+	# symbols files are x64 only and a .deb cannot be generated for them. The
+	# real runtime contract lives in debian/control: nodejs (>= 24.21), which
+	# pulls libc6, libstdc++6 and libgcc-s1 transitively (postgres/redis on
+	# master). So the shlibdeps pass is skipped: $$shlibs:Depends stays
+	# empty and the declared Depends are what ships.
+
 override_dh_fixperms:
 	dh_fixperms
 	chmod 0600 debian/qadam-flow/etc/qadam-flow/master.conf
