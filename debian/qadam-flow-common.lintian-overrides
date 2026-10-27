@@ -48,4 +48,5 @@ qadam-flow-common: executable-not-elf-or-script
 # /usr/local/etc/isolate is the isolate sandbox's compiled-in config
 # path, a plain FILE the Docker image COPYs to exactly that path:
 qadam-flow-common: dir-in-usr-local
+qadam-flow-common: file-in-usr-local
 qadam-flow-common: file-in-unusual-dir
