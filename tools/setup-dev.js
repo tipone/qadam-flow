@@ -4,10 +4,6 @@ const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
-// Keep the env file in one place for both the dev pieces build and the app bootstraps.
-// QF_ is the canonical prefix; AP_ENV_FILE remains accepted during the rename.
-const envFile = process.env.QF_ENV_FILE || process.env.AP_ENV_FILE || '.env.dev';
-
 // Check Node.js version
 const nodeVersion = execSync('node --version').toString().trim();
 const requiredVersions = ['v18', 'v22', 'v24'];
@@ -51,7 +47,7 @@ const findAllPieceFolders = (folderPath) => {
 const dotenv = require('dotenv');
 let envConfig = {};
 try {
-  envConfig = dotenv.parse(fs.readFileSync(envFile, 'utf-8'));
+  envConfig = dotenv.parse(fs.readFileSync('.env.dev', 'utf-8'));
 } catch { }
 
 const devPieces = process.env.AP_DEV_PIECES || envConfig.AP_DEV_PIECES;
