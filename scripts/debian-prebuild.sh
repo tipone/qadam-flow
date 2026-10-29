@@ -416,6 +416,25 @@ else
     grep -q '#include <cstdint>' "$IVM_H" \
         || sed -i '0,/#include <memory>/s//#include <cstdint>\n#include <memory>/' "$IVM_H"
     grep -q '#include <cstdint>' "$IVM_H" || fail "isolated-vm timer.h patch did not apply"
+    # isolated-vm v7's binding.gyp adopts the RUNNING node binary's own linker
+    # list into the add-on: '<!@(node -e "process.config.target_defaults.
+    # libraries.map(flag=>console.log(flag))")'. A distro node builds its
+    # node-internal deps as shared libraries, so that list carries flags for
+    # libraries the distro does not ship as linkables (-lllhttp -lada-url0
+    # -lsimdjson -lsimdutf -lbrotli* -lgtest -lhdr_histogram -lnghttp* -lzstd
+    # -licu*) and SOLINK aborts with "cannot find" — while the official-image
+    # node the Docker build compiles under prints an EMPTY list. This must be
+    # neutralized separately from the headers pin above: process.config is
+    # read from the interpreter that LAUNCHES gyp, so npm_config_nodedir
+    # cannot change it. With the expansion emptied the add-on links nothing
+    # extra (symbols resolve from node at load time) under a Debian distro
+    # runtime alike. Idempotent; redone after every fresh npm ci.
+    if grep -q 'process.config.target_defaults.libraries' "$IVM/binding.gyp"; then
+        log "isolated-vm binding.gyp: dropping the running-node library adoption (distro node lists its internal shared libs)"
+        sed -i 's|process\.config\.target_defaults\.libraries\.map(flag=>console\.log(flag))||' "$IVM/binding.gyp"
+        grep -q '<!@(node -e "")' "$IVM/binding.gyp" \
+            || fail "isolated-vm binding.gyp running-node library adoption patch did not apply"
+    fi
     (cd "$IVM" && rm -rf build && ../../node_modules/.bin/node-gyp rebuild --release -j max) \
         || fail "isolated-vm native compile failed — see the gyp output above"
     test -s "$IVM/build/Release/isolated_vm.node" || fail "isolated_vm.node was not produced"
