@@ -13,8 +13,12 @@ CONF=/etc/qadam-flow/master.conf
 
 SECRET=$(sed -n 's/^AP_JWT_SECRET=//p' "$CONF" | tail -n 1)
 [ -n "$SECRET" ] || { echo "ERROR: AP_JWT_SECRET not found in $CONF" >&2; exit 1; }
+# Optional: AP_WORKER_GROUP_ID in the conf is bound into the token claim the
+# same way docker-entrypoint.sh binds it — the API routes the holder's jobs
+# by this claim (the worker must then run a SANDBOX_* execution mode).
+GROUP_ID=$(sed -n 's/^AP_WORKER_GROUP_ID=//p' "$CONF" | tail -n 1)
 [ -d /usr/lib/qadam-flow/node_modules ] || { echo "ERROR: qadam-flow-common not installed on this host." >&2; exit 1; }
 
 cd /usr/lib/qadam-flow
-AP_JWT_SECRET="$SECRET" \
-    node -e 'const jwt=require("jsonwebtoken"),crypto=require("crypto");process.stdout.write(jwt.sign({id:crypto.randomUUID(),type:"WORKER"},process.env.AP_JWT_SECRET,{expiresIn:"100y",keyid:"1",algorithm:"HS256",issuer:"qadam-flow"}))'
+AP_JWT_SECRET="$SECRET" AP_WORKER_GROUP_ID="$GROUP_ID" \
+    node -e 'const jwt=require("jsonwebtoken"),crypto=require("crypto");const grp=process.env.AP_WORKER_GROUP_ID||undefined;process.stdout.write(jwt.sign({id:crypto.randomUUID(),type:"WORKER",...(grp?{workerGroupId:grp}:{})},process.env.AP_JWT_SECRET,{expiresIn:"100y",keyid:"1",algorithm:"HS256",issuer:"qadam-flow"}))'

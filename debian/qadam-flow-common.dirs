@@ -2,3 +2,6 @@ var/lib/qadam-flow/qadam-versions
 var/cache/qadam-flow
 usr/share/qadam-flow
 usr/local/etc
+# isolate's compiled-in box_root (default.cf) — exists so SANDBOX_PROCESS
+# mode only has to handle cgroup/capability setup, not a missing directory
+var/local/lib/isolate

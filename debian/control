@@ -16,6 +16,8 @@ Package: qadam-flow-common
 Architecture: amd64
 Depends:
  ${misc:Depends},
+ libcap2,
+ unzip,
 Breaks: qadam-flow (<< 1.1.0~stable.b1)
 Description: qadam-flow shared runtime tree (Node.js modules, builds)
  Shared program tree for the qadam-flow master and worker binary packages:

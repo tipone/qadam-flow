@@ -43,11 +43,18 @@ if grep -q '^AP_WORKER_TOKEN=CHANGE_ME$' "$WORKER_CONF"; then
         [ "$MAS_JWT" = "CHANGE_ME" ] && MAS_JWT=
     fi
 
+    # Optional worker group (bound into the token like docker-entrypoint.sh):
+    # the worker's own conf wins; a co-hosted master conf may also define it.
+    GROUP_ID=$(sed -n 's/^AP_WORKER_GROUP_ID=//p' "$WORKER_CONF" | tail -n 1)
+    if [ -z "$GROUP_ID" ] && [ -r "$MASTER_CONF" ]; then
+        GROUP_ID=$(sed -n 's/^AP_WORKER_GROUP_ID=//p' "$MASTER_CONF" | tail -n 1)
+    fi
+
     NEW_TOKEN=
     if [ -n "$MAS_JWT" ] && [ -d /usr/lib/qadam-flow/node_modules ]; then
         NEW_TOKEN=$(cd /usr/lib/qadam-flow \
-            && AP_JWT_SECRET="$MAS_JWT" \
-            node -e 'const jwt=require("jsonwebtoken"),crypto=require("crypto");process.stdout.write(jwt.sign({id:crypto.randomUUID(),type:"WORKER"},process.env.AP_JWT_SECRET,{expiresIn:"100y",keyid:"1",algorithm:"HS256",issuer:"qadam-flow"}))' \
+            && AP_JWT_SECRET="$MAS_JWT" AP_WORKER_GROUP_ID="$GROUP_ID" \
+            node -e 'const jwt=require("jsonwebtoken"),crypto=require("crypto");const grp=process.env.AP_WORKER_GROUP_ID||undefined;process.stdout.write(jwt.sign({id:crypto.randomUUID(),type:"WORKER",...(grp?{workerGroupId:grp}:{})},process.env.AP_JWT_SECRET,{expiresIn:"100y",keyid:"1",algorithm:"HS256",issuer:"qadam-flow"}))' \
         ) || NEW_TOKEN=
     fi
 
@@ -71,7 +78,11 @@ if grep -q '^AP_WORKER_TOKEN=CHANGE_ME$' "$WORKER_CONF"; then
             exit 1
         fi
         chmod 0600 "$WORKER_CONF"
-        echo "qadam-flow-worker: minted AP_WORKER_TOKEN from the co-installed master's AP_JWT_SECRET."
+        if [ -n "$GROUP_ID" ]; then
+            echo "qadam-flow-worker: minted AP_WORKER_TOKEN (workerGroupId '$GROUP_ID' bound into the token)."
+        else
+            echo "qadam-flow-worker: minted AP_WORKER_TOKEN from the co-installed master's AP_JWT_SECRET."
+        fi
     else
         cat <<'NO_MINT'
 qadam-flow-worker: AP_WORKER_TOKEN is still CHANGE_ME in /etc/qadam-flow/worker.conf.

@@ -146,10 +146,26 @@ resume never writes the repo tree, and `4c`, manifest writes, staging,
 dpkg and lintian stay unconditional because the payload must always be
 current.
 
-The committed `package-lock.json` is then the npm-path source of truth: the
-prebuild uses it verbatim (no registry re-resolution) and re-resolving
-requires a deliberate `REFRESH_LOCK=1` run plus a new commit. With no
-committed lock and no `REFRESH_LOCK` the prebuild fails closed. One
+Which lock the prebuild installs is a mode decision, and the buildbot
+decides "regenerate every build": the knixbbot builder
+(config/builds/qadam-flow/qadam_flow_deb.yaml) exports `REFRESH_LOCK=1`
+on the Build debs step. Upstream dep bumps move the committed manifests
+without any lock commit on the packaging side — the packaging never
+touches the app's source tree — and a stale committed root lock only
+trips the repair gate below (it grafts missing names, it does not
+reconcile version pins; observed with 879179e8's exact @ai-sdk bumps).
+So every bot build re-resolves inside the copy: derived manifests ->
+registry -> repair/audit -> npm ci; the committed root lock is bypassed
+by design and the repo tree is never written. The same step exports
+`NPM_CONFIG_ALLOW_REMOTE=all`: npm 12's `allow-remote=none` default
+mis-fires on plain registry tarballs mid-regen (EALLOWREMOTE on
+packages that are not remote deps; npm/cli #9347, #9548, #9796,
+#9800) — the env is build-scope only, no `.npmrc`/payload change.
+Dev machines that want a recorded, reproducible lock keep the local
+three-state flow below (`REFRESH_LOCK=1` run + hand-commit); the
+prebuild still fails closed with neither.
+
+One
 `--package-lock-only` gotcha the prebuild handles for you: regen runs COLD —
 npm seeds its ideal tree from an installed `node_modules` even when only
 updating the lock (silently keeping OLD override-resolved versions), and a

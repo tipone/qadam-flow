@@ -55,6 +55,18 @@ over HTTP only. On a second host:
 Secrets stay on each host: only the master host needs the database and
 AP_ENCRYPTION_KEY; workers are stateless and carry no run history.
 
+Worker groups (optional)
+------------------------
+A worker can be pinned to a named group: set AP_WORKER_GROUP_ID in
+/etc/qadam-flow/worker.conf. Both mint paths (the worker postinst on a
+co-hosted install, qadam-flow-mint-worker-token on a distributed one) bind
+the value into the AP_WORKER_TOKEN's workerGroupId claim exactly like the
+Docker image's entrypoint does — the API routes the holder's jobs through
+it. A group additionally requires SANDBOXED execution on the worker
+(AP_EXECUTION_MODE=SANDBOX_PROCESS or SANDBOX_CODE_AND_PROCESS) and an
+explicit AP_REUSE_SANDBOX=true|false; the worker refuses to start with a
+group in UNSANDBOXED mode.
+
 Sandboxed execution (optional)
 ------------------------------
 AP_EXECUTION_MODE in /etc/qadam-flow/worker.conf defaults to UNSANDBOXED, like

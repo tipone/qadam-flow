@@ -320,6 +320,43 @@ else
     keep_stamp lock "$LOCK_STAMP"
 fi
 
+# --- 3c. official node headers for every native compile -------------------------
+# Debian's nodejs dev headers record node's bundled dependencies as SHARED
+# libraries (node_shared_llhttp / -ada / -simdjson / -icu / ... in the distro
+# config.gypi), but the matching linkable archives ship nowhere on Debian —
+# llhttp/ada/simdjson/simdutf are node-internal builds. A node-gyp run under
+# the distro headers therefore aborts at SOLINK with
+#     cannot find -lllhttp -lada-url0 -lsimdjson -lsimdutf -licuuc ...
+# while the same command under the official v24.21.0 headers links fine
+# (official config bundles everything). The Docker image compiles
+# isolated-vm under the official node:24.21.0 image; the deb follows it and
+# pins EVERY node-gyp run in this build (the approved npm install-scripts
+# and the explicit isolated-vm rebuild) to the official nodejs.org headers
+# via npm config env — CLI/env level only, nothing outside build/ is
+# written. ABI is unaffected: headers only; the module ABI (137 for node 24)
+# matches the `nodejs (>= 24.21)` contract declared in debian/control, so
+# the compiled binding still loads under the installed distro node at run
+# time (verified post-compile by the native smoke check below).
+HDRS_DIR="$BUILD/node-headers"
+HDR_VER="$(node --version | sed 's/^v//')"
+NPM_CONFIG_HDR_DIR="$HDRS_DIR/node-v$HDR_VER"
+if [ ! -f "$NPM_CONFIG_HDR_DIR/include/node/node_version.h" ]; then
+    mkdir -p "$HDRS_DIR"
+    log "downloading official node $HDR_VER headers (distro headers break native linking)"
+    ( cd "$HDRS_DIR" \
+        && curl -fSLo "node-v$HDR_VER-headers.tar.gz" "https://nodejs.org/dist/v$HDR_VER/node-v$HDR_VER-headers.tar.gz" \
+        && tar -xzf "node-v$HDR_VER-headers.tar.gz" ) \
+        || fail "official node headers download failed — native compiles cannot run against the distro config"
+fi
+# The official headers tarball carries config.gypi under include/node/ with
+# every node_shared_* false (bundled deps) — the exact opposite of the
+# distro config that asked for -lllhttp/-licuuc. Guard on simdjson: it is
+# present in the official config for the whole node-24 line.
+grep -qE '"node_shared_(simdjson|ada)": ?"false"' "$NPM_CONFIG_HDR_DIR/include/node/config.gypi" \
+    || fail "downloaded headers do not look official (node_shared_* not false)"
+export npm_config_nodedir="$NPM_CONFIG_HDR_DIR"
+ok "official node headers pinned: npm_config_nodedir=$NPM_CONFIG_HDR_DIR"
+
 # --- 4. full dependency install -------------------------------------------------
 # REDISMS_DISABLE_POSTINSTALL=1 matches the Docker build: the redis client's
 # postinstall musl/glibc probe must not run on Debian (redis comes from the

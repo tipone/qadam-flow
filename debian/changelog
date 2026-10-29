@@ -1,5 +1,15 @@
 qadam-flow (1.1.0) unstable; urgency=medium
 
+  * Buildbot integration pass (seqdev): master/worker launchers run node
+    with --enable-source-maps (Docker entrypoint parity — the payload ships
+    the .map files); AP_WORKER_GROUP_ID is bound into the minted
+    AP_WORKER_TOKEN by both mint paths like docker-entrypoint.sh (the
+    worker must then run a SANDBOX_* mode), documented in worker.conf;
+    qadam-flow-common gains libcap2 (the vendored isolate binary needs
+    libcap.so.2, and dh_shlibdeps is deliberately skipped) and unzip (the
+    community oracle-database qadam shells out to unzip at run time); the
+    isolate box_root directory (var/local/lib/isolate) is pre-created.
+
   * Initial Debian packaging, three binary packages following Docker image
     layout — node 24 vendored runtime + PostgreSQL 18/pgvector dependency:
 
@@ -13,4 +23,4 @@ qadam-flow (1.1.0) unstable; urgency=medium
   * postinst mints AP_ENCRYPTION_KEY / AP_JWT_SECRET / the Postgres
     password, creates the qadam_flow role + database + pgvector extension.
 
- -- Kansu Köse <kansukse@gmail.com>  Tue, 27 Oct 2026 00:00:00 +0000
+ -- Kansu Köse <kansukse@gmail.com>  Thu, 29 Oct 2026 10:35:00 +0000
